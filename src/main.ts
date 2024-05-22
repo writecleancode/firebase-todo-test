@@ -1,6 +1,6 @@
-import './style.css';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, doc, updateDoc, addDoc, query, onSnapshot } from 'firebase/firestore';
+import { getFirestore, collection, doc, updateDoc, addDoc, query, onSnapshot, DocumentData, getDoc } from 'firebase/firestore';
+import './style.css';
 
 const firebaseConfig = {
 	apiKey: 'AIzaSyAp_qalqyu2oTzlMN0u76mdfkcoqE_ukqw',
@@ -13,6 +13,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const todosQuery = query(collection(db, 'todos'));
 
 const template = `
   <div>
@@ -21,46 +22,56 @@ const template = `
       <input type="text" id="title">
       <button type="submit">Submit</button>
     </form>
-    <ul class="todos"></ul>
+    <ul class="todos-list"></ul>
   </div>
 `;
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = template;
-const todosContainer = document.querySelector('.todos')!;
-const form = document.querySelector('.form');
+const todosContainer = document.querySelector<HTMLUListElement>('.todos-list')!;
+const form = document.querySelector<HTMLFormElement>('.form')!;
 
-form?.addEventListener('submit', async e => {
-	e.preventDefault();
-	const inputValue = document.querySelector<HTMLInputElement>('#title')!.value;
-	if (inputValue) {
-		await addDoc(collection(db, 'todos'), {
-			title: inputValue,
-			done: false,
-		});
-	}
-});
-
-const createTask = (id: any, task: any) => {
+const createTodo = (id: string, todo: DocumentData) => {
 	const li = document.createElement('li');
 	li.classList.add('todo-task');
-	li.innerHTML = `<p id="${id}">${task.done ? '✅' : '⭐'} ${task.title}</p>`;
+	li.innerHTML = `<p id="${id}">${todo.done ? '✅' : '⭐'} ${todo.title}</p>`;
 
 	return li;
 };
 
-const tasksQuerry = query(collection(db, 'todos'));
-export const unsub = onSnapshot(tasksQuerry, tasksSnapshot => {
-	todosContainer.innerHTML = '';
+const unsub = onSnapshot(todosQuery, todosSnapshot => {
+	todosContainer.innerHTML = ``;
 
-	tasksSnapshot.forEach(task => {
-		todosContainer?.append(createTask(task.id, task.data()));
+	todosSnapshot.forEach(todo => {
+		todosContainer.append(createTodo(todo.id, todo.data()));
 	});
 });
 
-todosContainer?.addEventListener('click', async (e: any) => {
-	if (!e.target.id) return;
-	const taskRef = doc(db, 'todos', e?.target.id);
-	await updateDoc(taskRef, {
-		done: true,
-	});
+todosContainer.addEventListener('click', async (e: MouseEvent) => {
+	if (!(<HTMLElement>e.target).id) return;
+
+	const todoRef = doc(db, 'todos', (<HTMLElement>e.target).id);
+	const todo: any = await getDoc(todoRef);
+	try {
+		await updateDoc(todoRef, {
+			// done: true,
+			done: !todo.data().done,
+		});
+	} catch (error) {
+		console.log(error);
+	}
+});
+
+form.addEventListener('submit', async (e: SubmitEvent) => {
+	e.preventDefault();
+	const inputValue = form.querySelector<HTMLInputElement>('#title')!.value;
+
+	if (!inputValue) return;
+	try {
+		await addDoc(collection(db, 'todos'), {
+			title: inputValue,
+			done: false,
+		});
+	} catch (error) {
+		console.log(error);
+	}
 });
